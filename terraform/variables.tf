@@ -27,3 +27,8 @@ variable "stage" {
   type        = string
   default     = "Dev"
 }
+
+variable "s3_bucket_name" {
+  description = "The globally unique name for the S3 bucket. Must be unique."
+  type        = string
+}

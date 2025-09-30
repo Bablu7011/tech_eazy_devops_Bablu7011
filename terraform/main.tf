@@ -93,7 +93,11 @@ resource "aws_instance" "devops_ec2" {
   subnet_id                   = aws_subnet.devops_subnet.id
   vpc_security_group_ids      = [aws_security_group.devops_sg.id]
 
-  user_data = file("${path.module}/../scripts/user_data.sh")
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+
+  user_data = templatefile("${path.module}/../scripts/user_data.sh.tpl", {
+    s3_bucket_name = var.s3_bucket_name
+})
 
   tags = {
     Name  = "${var.stage}-devops-ec2"
