@@ -2,14 +2,13 @@ provider "aws" {
   region = var.region
 }
 
-# -------------------------
-# Networking
-# -------------------------
+# --------------------------
+# Networking setup (VPC, Subnets, IGW, Route Table)
+# --------------------------
 resource "aws_vpc" "devops_vpc" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-
   tags = {
     Name = "${var.stage}-vpc"
   }
@@ -19,15 +18,24 @@ resource "aws_subnet" "devops_subnet" {
   vpc_id                  = aws_vpc.devops_vpc.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
-
+  availability_zone       = "${var.region}a"
   tags = {
     Name = "${var.stage}-subnet"
   }
 }
 
+resource "aws_subnet" "devops_subnet_2" {
+  vpc_id                  = aws_vpc.devops_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "${var.region}b"
+  tags = {
+    Name = "${var.stage}-subnet-2"
+  }
+}
+
 resource "aws_internet_gateway" "devops_igw" {
   vpc_id = aws_vpc.devops_vpc.id
-
   tags = {
     Name = "${var.stage}-igw"
   }
@@ -35,12 +43,10 @@ resource "aws_internet_gateway" "devops_igw" {
 
 resource "aws_route_table" "devops_rt" {
   vpc_id = aws_vpc.devops_vpc.id
-
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.devops_igw.id
   }
-
   tags = {
     Name = "${var.stage}-rt"
   }
@@ -51,26 +57,28 @@ resource "aws_route_table_association" "devops_rta" {
   route_table_id = aws_route_table.devops_rt.id
 }
 
-# -------------------------
+resource "aws_route_table_association" "devops_rta_2" {
+  subnet_id      = aws_subnet.devops_subnet_2.id
+  route_table_id = aws_route_table.devops_rt.id
+}
+
+# --------------------------
 # Security Group
-# -------------------------
+# --------------------------
 resource "aws_security_group" "devops_sg" {
-  name        = "${var.stage}-devops-sg"
-  description = "Allow SSH and HTTP"
-  vpc_id      = aws_vpc.devops_vpc.id
+  name   = "${var.stage}-devops-sg"
+  vpc_id = aws_vpc.devops_vpc.id
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -83,24 +91,36 @@ resource "aws_security_group" "devops_sg" {
   }
 }
 
-# -------------------------
-# EC2 Instance
-# -------------------------
+# --------------------------
+# EC2 Instances
+# --------------------------
 resource "aws_instance" "devops_ec2" {
-  ami                         = var.ami
-  instance_type               = var.instance_type
-  key_name                    = var.key_name
-  subnet_id                   = aws_subnet.devops_subnet.id
-  vpc_security_group_ids      = [aws_security_group.devops_sg.id]
+  count                  = var.instance_count + 1
+  ami                    = "ami-0f5ee92e2d63afc18" # Ubuntu 22.04 LTS (ap-south-1)
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  subnet_id              = count.index % 2 == 0 ? aws_subnet.devops_subnet.id : aws_subnet.devops_subnet_2.id
+  vpc_security_group_ids = [aws_security_group.devops_sg.id]
 
-  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   user_data = templatefile("${path.module}/../scripts/user_data.sh.tpl", {
-    s3_bucket_name = var.s3_bucket_name
-})
+    JAR_BUCKET           = aws_s3_bucket.jar_bucket.id
+    EC2_LOGS_BUCKET      = aws_s3_bucket.ec2_logs_bucket.id  
+  })
 
   tags = {
-    Name  = "${var.stage}-devops-ec2"
+    Name  = "${var.stage}-devops-ec2-${count.index}"
     Stage = var.stage
   }
+}
+
+# --------------------------
+# Attach EC2 instances to LB Target Group
+# --------------------------
+resource "aws_lb_target_group_attachment" "tga" {
+  count            = length(aws_instance.devops_ec2)
+  target_group_arn = aws_lb_target_group.main_tg.arn
+  target_id        = aws_instance.devops_ec2[count.index].id
+  port             = 80
 }
