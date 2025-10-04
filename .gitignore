@@ -1,0 +1,21 @@
+﻿# Local Terraform directories
+terraform/.terraform/
+
+# Local Terraform state files
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+
+# Crash log files
+terraform/crash.log
+
+# Provider lock files
+terraform/.terraform.lock.hcl
+
+# Override files
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
+
+# Java build artifacts
+java-app/target/
