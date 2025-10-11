@@ -26,7 +26,7 @@ aws ec2 import-key-pair \
 
 Avoid hardcoding the key in Terraform. Instead, export it as an environment variable:
 
-export TF_VAR_key_name="aws-key "
+export TF_VAR_key_name="aws-key"
 
 4. Deploy Infrastructure with Terraform
 

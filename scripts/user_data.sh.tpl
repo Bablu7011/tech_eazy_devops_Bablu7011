@@ -74,7 +74,7 @@ while true; do
     aws s3 cp /app/polling_service.log s3://$${EC2_LOGS_BUCKET}/$${INSTANCE_ID}/polling_service.log
   fi
   
-  sleep 120
+  sleep 300
 done
 EOF
 echo "Finished creating /app/poll_s3.sh."
