@@ -1,223 +1,287 @@
-Assignment 1:- DevOps Assignment – Automate EC2 Deployment
+# ☁️ DevOps Project – AWS Infrastructure Automation using Terraform
+
+This project demonstrates a complete AWS automation pipeline — from provisioning EC2 instances to enabling CI/CD, Auto Scaling, and centralized logging — all using Terraform and GitHub Actions.
+
+---
+
+## 🚀 Assignment 1 – Automate EC2 Deployment
 
 This project demonstrates how to automate the provisioning of an EC2 instance on AWS using Terraform.
 
-🚀 Steps to Deploy
-1. Configure AWS CLI
+### Steps to Deploy
+1. **Configure AWS CLI**
+   ```bash
+   aws configure
 
-Run the following command and provide your AWS Access Key, Secret Key, Region, and Output format:
 
-aws configure
+Enter your AWS Access Key, Secret Key, Region, and Output format.
 
-2. Create an SSH Key
-
-Generate an SSH key locally:
+Create an SSH Key
 
 ssh-keygen -t rsa -b 2048 -f ~/.ssh/mykey
+aws ec2 import-key-pair --key-name "mykey" --public-key-material fileb://~/.ssh/mykey.pub
 
 
-Import the public key into AWS:
-
-aws ec2 import-key-pair \
-  --key-name "mykey" \
-  --public-key-material fileb://~/.ssh/my-key.pub
-
-3. Set Environment Variable for Key Name
-
-Avoid hardcoding the key in Terraform. Instead, export it as an environment variable:
+Set Environment Variable for Key Name
 
 export TF_VAR_key_name="aws-key"
 
-4. Deploy Infrastructure with Terraform
 
-Go to the Terraform directory and run:
+Deploy Infrastructure
 
 cd terraform
 terraform init
 terraform apply -auto-approve
 
-5. Get Public IP of EC2
 
-After deployment, fetch the public IP:
+Get Public IP of EC2
 
 terraform output ec2_public_ip
 
-6. Test in Browser
 
-Open your browser and visit:
+Test in Browser
+Visit:
 
 http://<PUBLIC_IP>
 
-7. Destroy Resources After Testing
 
-To avoid unnecessary costs, destroy the infrastructure when no longer needed:
+Destroy Resources
 
 terraform destroy -auto-approve
 
-
-
-
-📌 Assignment 2 – S3 Integration, IAM, and Logging
+📦 Assignment 2 – S3 Integration, IAM, and Logging
 
 This assignment extends the EC2 deployment by integrating S3 for log archival and IAM roles for secure, keyless access.
 
-
 🔑 Features Implemented
-1. Secure S3 Bucket
 
-A private S3 bucket was created to store application logs.
+Secure S3 Bucket
 
-The bucket name is configurable via a Terraform variable to avoid conflicts.
+Private S3 bucket for storing logs.
 
-2. IAM Roles for Security (Principle of Least Privilege)
+Configurable bucket name via Terraform variable.
 
-Two IAM roles were created:
+IAM Roles (Least Privilege)
 
-Uploader Role (Role B): Can only create bucket objects and upload logs, with no read/download permissions. Attached to the EC2 instance.
+Uploader Role: Attached to EC2, only uploads logs.
 
-Read-Only Role (Role A): Can only list files in the bucket, used for verification.
+Auditor Role: Read-only, used for verification.
 
-3. Keyless EC2 to S3 Access
+Keyless EC2 → S3 Access
 
-The EC2 instance uses an IAM Instance Profile to assume the Uploader Role.
+EC2 uses an IAM Instance Profile.
 
-This allows the instance to interact with S3 without storing AWS keys locally.
+No AWS keys stored locally.
 
-4. Automated Log Upload
+Automated Log Upload
 
-The user_data.sh script was updated to:
+user_data.sh starts the app and uploads logs to:
 
-Start the Java application.
-
-Upload logs automatically to s3://<bucket-name>/app/logs.
-
-5. Log Retention Policy
-
-An S3 Lifecycle Rule automatically deletes logs after 7 days.
-
-This helps optimize costs and prevents clutter.
-
-6. Code Organization
-
-Terraform configuration is modularized:
-
-main.tf – EC2 and networking
-
-iam.tf – IAM roles and policies
-
-s3.tf – S3 bucket and lifecycle rules
+s3://<bucket-name>/app/logs
 
 
+S3 Lifecycle Rule
 
+Automatically deletes logs after 7 days.
 
-Verification using the Read-Only Role
-The final step of the assignment was to ensure the security policies were working correctly by using the specially created read-only 'Auditor' role.
+Terraform Structure
 
+main.tf → EC2 + Networking
 
-This was tested using the "Switch Role" functionality within the AWS Management Console. By providing the AWS Account ID and the specific name of the auditor IAM role (e.g., Dev-s3-auditor-role), I temporarily adopted its limited permissions to interact with the S3 service.
+iam.tf → IAM Roles
 
+s3.tf → S3 + Lifecycle Rules
 
+🔍 Verification (Auditor Role)
 
-📘 Assignment 3: CI/CD with GitHub Actions, ELB, and a Pull-Based Deployment Model
+Used Switch Role in AWS Console → Dev-s3-auditor-role.
 
-This assignment evolves the project into a complete CI/CD pipeline, building a highly available and self-updating system.
-The core responsibility shifts from the server building the code (push model) to a CI/CD pipeline building the code and the servers automatically pulling the latest version (pull model).
+Verified logs via:
+
+https://s3.console.aws.amazon.com/s3/buckets/<bucket-name>
+
+⚙️ Assignment 3 – CI/CD with GitHub Actions, ELB, and Pull-Based Deployment Model
+
+This phase builds a self-updating, scalable system with Load Balancer integration and CI/CD pipeline automation.
 
 🏗️ New Architecture
 
-The infrastructure was significantly upgraded for resilience and scalability:
+Application Load Balancer (ELB):
+Distributes traffic across multiple EC2 instances.
 
-🌐 Application Load Balancer (ELB):
-Distributes incoming traffic across multiple EC2 instances in a Round Robin fashion, ensuring high availability.
+Multiple EC2 Instances:
+Configurable via Terraform variable, auto-registered to Target Group.
 
-🖥️ Multiple EC2 Instances:
-The system now supports a configurable number of EC2 instances (1 + n), automatically registered with the Load Balancer’s target group.
+S3 Buckets:
 
-📂 Three Distinct S3 Buckets:
+JAR Bucket (stores app builds)
 
-JAR Bucket: Stores the compiled Java application (.jar file). EC2 instances watch this bucket for updates.
+EC2 Logs Bucket (collects logs per instance)
 
-EC2 Logs Bucket: Collects logs from each individual EC2 instance in folders named by instance ID.
+ELB Logs Bucket (stores ALB access logs)
 
-ELB Logs Bucket: Stores Application Load Balancer access logs for traffic analysis.
+🔄 Self-Updating Deployment
 
-🔄 Self-Updating Deployment Strategy (Pull Model)
+Each EC2 polls JAR S3 Bucket every 5 minutes.
 
-A robust pull-based mechanism was implemented:
+If a new .jar file is found:
 
-📡 S3 Polling:
-Each EC2 instance runs a background script that polls the JAR S3 bucket every 5 minutes.
+Old process stops.
 
-⚡ Automatic Updates:
-When a new/updated .jar file is detected:
+New version runs automatically.
 
-The old application process is terminated.
+🧩 CI/CD Workflow
 
-The new version is automatically started.
+Triggered manually via workflow_dispatch in GitHub Actions.
 
-👉 This makes the entire server fleet self-updating without any direct SSH commands from the CI/CD pipeline.
+Builds Java project with Maven.
 
-⚙️ CI/CD Workflow with GitHub Actions
+Uploads new JAR to S3 bucket → EC2 auto-updates itself.
 
-The CI/CD pipeline is now focused and streamlined:
+🔒 Security Enhancements
 
-🖱️ Manual Trigger:
-GitHub Action is configured with a workflow_dispatch trigger → developers can start a deployment manually from the GitHub UI.
+IAM Policies follow Principle of Least Privilege.
 
-🏗️ Build and Upload:
+ELB has its own logging S3 bucket policy.
 
-Builds Java source code into a .jar file using Maven.
+Auditor Role has read-only access to all buckets.
 
-Uploads the final .jar artifact to the JAR S3 bucket.
+✅ Verification
 
-This upload is the event that triggers self-updating on EC2 instances.
+Assume Auditor Role.
 
-🔐 Security and Logging Enhancements
+Visit:
 
-📁 Segregated Policies:
-All IAM & S3 policies are now managed in a dedicated /policy directory for better organization.
-
-🔒 Principle of Least Privilege:
-
-EC2 instances have specific IAM roles with two policies:
-
-Read-only for JAR bucket.
-
-Write-only for EC2 logs bucket.
-
-🛡️ Service-Level Permissions:
-ELB logs bucket has a dedicated S3 Bucket Policy, allowing ELB service to write its access logs.
-
-👤 Auditor Role:
-An "Auditor" IAM role was created (from Assignment 2).
-
-Lets a human securely assume the role in AWS Console.
-
-Grants read-only access to all three S3 buckets for verification.
+https://s3.console.aws.amazon.com/s3/buckets/<your-bucket>
 
 
+View:
 
+jar/ → latest build
 
+ec2-logs/ → instance logs
 
-✅ How to Verify
-Since the bucket is private, you won’t see logs by default. Instead, follow these steps:
-
-Use Role A (Read-Only Role):
-Assume the role or log in with it to test.
-
-Access Bucket via Direct URL:
-Open the following in your browser:
-
-https://s3.console.aws.amazon.com/s3/buckets/<your-unique-bucket-name>
-
-
-Replace <your-unique-bucket-name> with the actual bucket name (e.g., private-key1q2w3e).
-
-Check Logs:
-You should see uploaded logs inside the app/logs folder.
+alb-logs/ → ALB access logs
 
 🗑️ Cleanup
+terraform destroy -auto-approve
 
-Once done, destroy the infrastructure to avoid charges:
+📊 Assignment 4 – Auto Scaling, Monitoring, and Centralized Event Logging
+
+This assignment focuses on dynamic scaling of infrastructure based on traffic and real-time event logging using CloudWatch, SNS, and Lambda.
+
+🌐 Overview
+
+Goal: Automatically scale EC2 instances based on ALB traffic and log every scaling event centrally.
+
+Key Components:
+
+CloudWatch Alarms
+
+Auto Scaling Group (ASG)
+
+SNS Notifications
+
+Lambda Logging Function
+
+CloudWatch Dashboards
+
+🧠 Features Implemented
+
+Auto Scaling Policies
+
+Scale Up:
+If ALB request count per target > 100 for 1 minute → add 1 instance.
+
+Scale Down:
+If ALB request count < 100 for 5 minutes → remove 1 instance.
+
+Implemented using aws_autoscaling_policy + aws_cloudwatch_metric_alarm.
+
+SNS Notifications
+
+ASG sends lifecycle events (Launch/Terminate) to an SNS topic.
+
+Topic has two subscribers:
+
+Lambda function (for logging)
+
+Email alerts for admin
+
+Lambda for Event Logging
+
+Function: dev-asg-log-writer
+
+Triggered automatically via SNS.
+
+Writes structured JSON logs to CloudWatch under:
+
+/aws/autoscaling/dev-asg
+
+
+Logs every EC2 scale event, including instance ID, cause, and policy name.
+
+CloudWatch Dashboard
+
+Displays key metrics:
+
+ALB request count
+
+Number of EC2 instances
+
+Scaling activity (up/down events)
+
+Helps visualize system behavior in real time.
+
+IAM Roles & Permissions
+
+Lambda role has fine-grained permissions:
+
+logs:CreateLogGroup
+logs:CreateLogStream
+logs:PutLogEvents
+
+
+Auto Scaling and CloudWatch integration via Terraform-managed roles.
+
+Centralized Event Logging
+
+Every scaling action is logged as:
+
+🪶 Auto Scaling Event:
+EC2 Instance i-xxxxxxxx launched due to high traffic.
+
+
+Stored securely in CloudWatch Logs.
+
+✅ Verification Steps
+
+Trigger Scale Up
+
+Increase ALB traffic >100 requests/min.
+
+Verify:
+
+New EC2 instance launched.
+
+Log entry appears in /aws/autoscaling/dev-asg.
+
+Trigger Scale Down
+
+Let traffic fall <100 for 5 minutes.
+
+Verify instance termination in logs.
+
+Email Notification
+
+Confirm scaling event emails received from SNS.
+
+Dashboard
+
+Check CloudWatch Dashboard for scaling history and instance count.
+
+🧹 Cleanup
+
+After validation, destroy the infrastructure to save cost:
 
 terraform destroy -auto-approve
