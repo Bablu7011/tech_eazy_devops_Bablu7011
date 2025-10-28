@@ -268,7 +268,7 @@ Log entry appears in /aws/autoscaling/dev-asg.
 
 Trigger Scale Down
 
-Let traffic fall <100 for 5 minutes.
+Let traffic fall <70 for 15 minutes.
 
 Verify instance termination in logs.
 
